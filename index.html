@@ -1,129 +1,429 @@
-  {/* User Modal */}
-        {showUserModal && (
-          <ModalWrapper title={editingId ? 'Editar Usuário' : 'Novo Usuário'} onClose={() => setShowUserModal(false)}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-gray-600">Nome</label>
-                <input value={userForm.nome} onChange={(e) => setUserForm((f) => ({ ...f, nome: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded" />
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Email</label>
-                <input value={userForm.email} onChange={(e) => setUserForm((f) => ({ ...f, email: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded" />
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Senha</label>
-                <input value={userForm.senha} onChange={(e) => setUserForm((f) => ({ ...f, senha: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded" />
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Função</label>
-                <select value={userForm.role} onChange={(e) => setUserForm((f) => ({ ...f, role: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded">
-                  <option value="usuario">Usuário</option>
-                  <option value="admin">Administrador</option>
-                </select>
-              </div>
-            </div>
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Package,
+  History,
+  Barcode,
+  TrendingUp,
+  TrendingDown,
+  Camera,
+  Search,
+  Users,
+  LogOut,
+} from 'lucide-react';
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button onClick={() => setShowUserModal(false)} className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200">Cancelar</button>
-              <button onClick={() => (editingId ? updateUser(editingId) : addUser())} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">{editingId ? 'Atualizar' : 'Adicionar'}</button>
-            </div>
-          </ModalWrapper>
-        )}
+// Types
+type Product = { id: string; nome: string; estoque: number; barcode?: string; qrcode?: string };
+type User = { id: string; nome: string; email: string; role: 'admin' | 'usuario' };
+type Movement = { id: string; data: string; produtoId: string; produtoNome: string; tipo: 'entrada' | 'saida'; quantidade: number; usuarioNome: string; observacao?: string; isScanned?: boolean };
+
+// Simple modal wrapper component
+const ModalWrapper: React.FC<{ title?: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl max-w-3xl w-full p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">{title}</h3>
+          <button onClick={onClose} aria-label="Fechar" className="text-gray-500 hover:text-gray-700">✕</button>
+        </div>
+        {children}
       </div>
-    );
+    </div>
+  );
+};
+
+const formatDateTime = (iso?: string) => (iso ? new Date(iso).toLocaleString() : new Date().toLocaleString());
+
+const ERPSystem: React.FC = () => {
+  // --- states (minimal, kept intentionally simple so you can plug your real logic) ---
+  const [currentUser, setCurrentUser] = useState<User | null>({ id: 'u1', nome: 'João Silva', email: 'joao@ex.com', role: 'admin' });
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'movements' | 'users'>('dashboard');
+  const [lastUpdate, setLastUpdate] = useState<string>(new Date().toISOString());
+
+  // Products / users / movements sample data
+  const [products, setProducts] = useState<Product[]>([
+    { id: 'p1', nome: 'Parafuso M4', estoque: 120, barcode: '123456789012', qrcode: 'QR-P1' },
+    { id: 'p2', nome: 'Porca M4', estoque: 80, barcode: '987654321098', qrcode: 'QR-P2' },
+  ]);
+
+  const [users, setUsers] = useState<User[]>([
+    { id: 'u1', nome: 'João Silva', email: 'joao@ex.com', role: 'admin' },
+    { id: 'u2', nome: 'Maria Oliveira', email: 'maria@ex.com', role: 'usuario' },
+  ]);
+
+  const [movements, setMovements] = useState<Movement[]>([]);
+
+  // UI state
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [userForm, setUserForm] = useState({ nome: '', email: '', senha: '', role: 'usuario' });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showScanner, setShowScanner] = useState(false);
+  const [scannerType, setScannerType] = useState<'manual' | 'camera'>('manual');
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Movement quick-form
+  const [movementForm, setMovementForm] = useState({ produtoId: '', tipo: 'entrada', quantidade: 1, observacao: '' as string });
+
+  // Derived
+  const filteredMovements = movements.filter((m) => [m.produtoNome, m.usuarioNome, m.observacao].join(' ').toLowerCase().includes(searchTerm.toLowerCase()));
+
+  useEffect(() => {
+    // update timestamp
+    const id = setInterval(() => setLastUpdate(new Date().toISOString()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // --- handlers (simple implementations you can replace) ---
+  const addUser = () => {
+    const id = `u${Date.now()}`;
+    setUsers((s) => [...s, { id, nome: userForm.nome || 'Sem nome', email: userForm.email || '', role: userForm.role as 'admin' | 'usuario' }]);
+    setShowUserModal(false);
+    setUserForm({ nome: '', email: '', senha: '', role: 'usuario' });
   };
 
-  // Movements View
-  const MovementsView = () => {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Movimentações de Estoque</h3>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 text-gray-400" size={16} />
-              <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className="pl-10 pr-4 py-2 border rounded-lg" />
-            </div>
-            <button onClick={() => { setShowScanner(true); setScannerType('manual'); }} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
-              <Camera size={16} /> Scanner
-            </button>
-          </div>
-        </div>
+  const updateUser = (id: string) => {
+    setUsers((s) => s.map((u) => (u.id === id ? { ...u, nome: userForm.nome, email: userForm.email, role: userForm.role as 'admin' | 'usuario' } : u)));
+    setEditingId(null);
+    setShowUserModal(false);
+  };
 
-        <div className="bg-white rounded-2xl shadow overflow-auto">
+  const handleEditUser = (id: string) => {
+    const u = users.find((x) => x.id === id);
+    if (!u) return;
+    setEditingId(id);
+    setUserForm((f) => ({ ...f, nome: u.nome, email: u.email, role: u.role }));
+    setShowUserModal(true);
+  };
+
+  const handleDeleteUser = (id: string) => {
+    if (!confirm('Remover usuário?')) return;
+    setUsers((s) => s.filter((u) => u.id !== id));
+  };
+
+  const handleMovementSubmit = () => {
+    if (!movementForm.produtoId) return alert('Selecione um produto');
+    const prod = products.find((p) => p.id === movementForm.produtoId)!;
+    const id = `m${Date.now()}`;
+    const newM: Movement = {
+      id,
+      data: new Date().toISOString(),
+      produtoId: prod.id,
+      produtoNome: prod.nome,
+      tipo: movementForm.tipo as 'entrada' | 'saida',
+      quantidade: Number(movementForm.quantidade),
+      usuarioNome: currentUser?.nome || 'Sistema',
+      observacao: movementForm.observacao || undefined,
+      isScanned: false,
+    };
+
+    setMovements((s) => [newM, ...s]);
+
+    // update stock locally (simple)
+    setProducts((ps) => ps.map((p) => (p.id === prod.id ? { ...p, estoque: p.estoque + (newM.tipo === 'entrada' ? newM.quantidade : -newM.quantidade) } : p)));
+
+    // reset form
+    setMovementForm({ produtoId: '', tipo: 'entrada', quantidade: 1, observacao: '' });
+  };
+
+  const handleManualScan = (e?: React.FormEvent<HTMLFormElement>) => {
+    e?.preventDefault();
+    const form = (e?.target as HTMLFormElement) || null;
+    const code = form ? (form.querySelector('input[name=scanInput]') as HTMLInputElement).value.trim() : '';
+    if (!code) return alert('Insira um código');
+
+    const found = products.find((p) => p.barcode === code || p.qrcode === code || p.id === code);
+    if (!found) return alert('Produto não encontrado');
+
+    // Quick register movement: entrada by default
+    const id = `m${Date.now()}`;
+    const newM: Movement = { id, data: new Date().toISOString(), produtoId: found.id, produtoNome: found.nome, tipo: 'entrada', quantidade: 1, usuarioNome: currentUser?.nome || 'Sistema', isScanned: true };
+    setMovements((s) => [newM, ...s]);
+    setProducts((ps) => ps.map((p) => (p.id === found.id ? { ...p, estoque: p.estoque + 1 } : p)));
+
+    // close scanner
+    setShowScanner(false);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+  };
+
+  // --- small UI components for views ---
+  const DashboardView = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded-2xl shadow">
+          <div className="text-sm text-gray-500">Produtos</div>
+          <div className="text-2xl font-bold mt-2">{products.length}</div>
+        </div>
+        <div className="bg-white p-4 rounded-2xl shadow"> 
+          <div className="text-sm text-gray-500">Movimentações</div>
+          <div className="text-2xl font-bold mt-2">{movements.length}</div>
+        </div>
+        <div className="bg-white p-4 rounded-2xl shadow"> 
+          <div className="text-sm text-gray-500">Usuários</div>
+          <div className="text-2xl font-bold mt-2">{users.length}</div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow p-6">
+        <h3 className="font-semibold mb-2">Últimas Movimentações</h3>
+        <div className="overflow-auto">
           <table className="w-full table-auto">
             <thead className="bg-gray-50">
               <tr>
-                <th className="text-left px-4 py-3 text-sm">Data/Hora</th>
+                <th className="text-left px-4 py-3 text-sm">Data</th>
                 <th className="text-left px-4 py-3 text-sm">Produto</th>
                 <th className="text-left px-4 py-3 text-sm">Tipo</th>
                 <th className="text-left px-4 py-3 text-sm">Quantidade</th>
                 <th className="text-left px-4 py-3 text-sm">Usuário</th>
-                <th className="text-left px-4 py-3 text-sm">Observação</th>
-                <th className="text-left px-4 py-3 text-sm">Origem</th>
               </tr>
             </thead>
             <tbody>
-              {filteredMovements.map((m) => (
-                <tr key={m.id} className="border-b hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm text-gray-600">{new Date(m.data).toLocaleString()}</td>
-                  <td className="px-4 py-3">{m.produtoNome}</td>
-                  <td className="px-4 py-3">
+              {movements.slice(0, 5).map((m) => (
+                <tr key={m.id} className="border-b last:border-b-0">
+                  <td className="px-4 py-3 text-sm text-gray-600">{formatDateTime(m.data)}</td>
+                  <td className="px-4 py-3 text-sm">{m.produtoNome}</td>
+                  <td className="px-4 py-3 text-sm">
                     <div className={`inline-flex items-center gap-2 px-2 py-1 rounded text-xs ${m.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                       {m.tipo === 'entrada' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                       <span>{m.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`${m.tipo === 'entrada' ? 'text-green-600' : 'text-red-600'} font-bold`}>{m.tipo === 'entrada' ? `+${m.quantidade}` : `-${m.quantidade}`}</span>
-                  </td>
+                  <td className="px-4 py-3 text-sm font-semibold">{m.quantidade}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{m.usuarioNome}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{m.observacao || '-'}</td>
-                  <td className="px-4 py-3 text-sm">{m.isScanned ? <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-purple-100 text-purple-700"><Camera size={14} />Scanner</span> : <span className="text-xs text-gray-400">Manual</span>}</td>
                 </tr>
               ))}
-              {filteredMovements.length === 0 && (
+              {movements.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-sm text-gray-500">Nenhuma movimentação encontrada.</td>
+                  <td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-500">Nenhuma movimentação registrada.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  );
 
-        {/* Registrar movimentação rápida */}
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h4 className="font-semibold mb-3">Registrar Movimentação</h4>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <select value={movementForm.produtoId} onChange={(e) => setMovementForm((f) => ({ ...f, produtoId: e.target.value }))} className="px-3 py-2 border rounded">
+  const ProductsView = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Produtos</h3>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-3 text-gray-400" size={16} />
+            <input aria-label="Buscar produtos" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar produto..." className="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+          </div>
+          <button onClick={() => alert('Novo produto (implemente)')} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Novo Produto</button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow overflow-auto">
+        <table className="w-full table-auto">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="text-left px-4 py-3 text-sm">Produto</th>
+              <th className="text-left px-4 py-3 text-sm">Estoque</th>
+              <th className="text-left px-4 py-3 text-sm">Barcode / QR</th>
+              <th className="text-left px-4 py-3 text-sm">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.filter((p) => p.nome.toLowerCase().includes(searchTerm.toLowerCase())).map((p) => (
+              <tr key={p.id} className="border-b hover:bg-gray-50">
+                <td className="px-4 py-3">{p.nome}</td>
+                <td className="px-4 py-3 font-mono">{p.estoque}</td>
+                <td className="px-4 py-3 text-xs text-gray-500">{p.barcode || '-'} • {p.qrcode || '-'}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => alert('Editar produto (implemente)')} className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm">Editar</button>
+                    <button onClick={() => alert('Ajuste estoque (implemente)')} className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm">Ajustar</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const MovementsView = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Movimentações de Estoque</h3>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-3 text-gray-400" size={16} />
+            <input aria-label="Buscar movimentações" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+          </div>
+          <button onClick={() => { setShowScanner(true); setScannerType('manual'); }} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+            <Camera size={16} /> Scanner
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow overflow-auto">
+        <table className="w-full table-auto">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="text-left px-4 py-3 text-sm">Data/Hora</th>
+              <th className="text-left px-4 py-3 text-sm">Produto</th>
+              <th className="text-left px-4 py-3 text-sm">Tipo</th>
+              <th className="text-left px-4 py-3 text-sm">Quantidade</th>
+              <th className="text-left px-4 py-3 text-sm">Usuário</th>
+              <th className="text-left px-4 py-3 text-sm">Observação</th>
+              <th className="text-left px-4 py-3 text-sm">Origem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredMovements.map((m) => (
+              <tr key={m.id} className="border-b hover:bg-gray-50">
+                <td className="px-4 py-3 text-sm text-gray-600">{formatDateTime(m.data)}</td>
+                <td className="px-4 py-3">{m.produtoNome}</td>
+                <td className="px-4 py-3">
+                  <div className={`inline-flex items-center gap-2 px-2 py-1 rounded text-xs ${m.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {m.tipo === 'entrada' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                    <span>{m.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`${m.tipo === 'entrada' ? 'text-green-600' : 'text-red-600'} font-bold`}>{m.tipo === 'entrada' ? `+${m.quantidade}` : `-${m.quantidade}`}</span>
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600">{m.usuarioNome}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">{m.observacao || '-'}</td>
+                <td className="px-4 py-3 text-sm">{m.isScanned ? <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-purple-100 text-purple-700"><Camera size={14} />Scanner</span> : <span className="text-xs text-gray-400">Manual</span>}</td>
+              </tr>
+            ))}
+            {filteredMovements.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-6 text-center text-sm text-gray-500">Nenhuma movimentação encontrada.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Registrar movimentação rápida */}
+      <div className="bg-white rounded-2xl shadow p-6">
+        <h4 className="font-semibold mb-3">Registrar Movimentação</h4>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <label className="block">
+            <span className="text-xs text-gray-600">Produto</span>
+            <select value={movementForm.produtoId} onChange={(e) => setMovementForm((f) => ({ ...f, produtoId: e.target.value }))} className="mt-1 block w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-200">
               <option value="">Selecione um produto</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>{p.nome} — Estoque: {p.estoque}</option>
               ))}
             </select>
+          </label>
 
-            <select value={movementForm.tipo} onChange={(e) => setMovementForm((f) => ({ ...f, tipo: e.target.value }))} className="px-3 py-2 border rounded">
+          <label className="block">
+            <span className="text-xs text-gray-600">Tipo</span>
+            <select value={movementForm.tipo} onChange={(e) => setMovementForm((f) => ({ ...f, tipo: e.target.value }))} className="mt-1 block w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-200">
               <option value="entrada">Entrada</option>
               <option value="saida">Saída</option>
             </select>
+          </label>
 
-            <input type="number" value={movementForm.quantidade} onChange={(e) => setMovementForm((f) => ({ ...f, quantidade: Number(e.target.value) }))} placeholder="Quantidade" className="px-3 py-2 border rounded" />
+          <label className="block">
+            <span className="text-xs text-gray-600">Quantidade</span>
+            <input type="number" min={1} value={movementForm.quantidade} onChange={(e) => setMovementForm((f) => ({ ...f, quantidade: Number(e.target.value) }))} placeholder="Quantidade" className="mt-1 block w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+          </label>
 
-            <input value={movementForm.observacao} onChange={(e) => setMovementForm((f) => ({ ...f, observacao: e.target.value }))} placeholder="Observação (opcional)" className="px-3 py-2 border rounded" />
-          </div>
+          <label className="block">
+            <span className="text-xs text-gray-600">Observação</span>
+            <input value={movementForm.observacao} onChange={(e) => setMovementForm((f) => ({ ...f, observacao: e.target.value }))} placeholder="Observação (opcional)" className="mt-1 block w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+          </label>
+        </div>
 
-          <div className="mt-4 text-right">
-            <button onClick={handleMovementSubmit} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Registrar Movimentação</button>
-          </div>
+        <div className="mt-4 text-right">
+          <button onClick={handleMovementSubmit} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Registrar Movimentação</button>
         </div>
       </div>
-    );
-  };
+    </div>
+  );
 
-  // ==========================
+  const UsersView = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Usuários</h3>
+        <div>
+          <button onClick={() => { setShowUserModal(true); setEditingId(null); setUserForm({ nome: '', email: '', senha: '', role: 'usuario' }); }} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Novo Usuário</button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow overflow-auto">
+        <table className="w-full table-auto">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="text-left px-4 py-3 text-sm">Nome</th>
+              <th className="text-left px-4 py-3 text-sm">Email</th>
+              <th className="text-left px-4 py-3 text-sm">Função</th>
+              <th className="text-left px-4 py-3 text-sm">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id} className="border-b hover:bg-gray-50">
+                <td className="px-4 py-3">{u.nome}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
+                <td className="px-4 py-3 text-sm">{u.role === 'admin' ? 'Administrador' : 'Usuário'}</td>
+                <td className="px-4 py-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleEditUser(u.id)} className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm">Editar</button>
+                    <button onClick={() => handleDeleteUser(u.id)} className="px-3 py-1 rounded bg-red-50 hover:bg-red-100 text-red-600 text-sm">Remover</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* User Modal */}
+      {showUserModal && (
+        <ModalWrapper title={editingId ? 'Editar Usuário' : 'Novo Usuário'} onClose={() => setShowUserModal(false)}>
+          <form onSubmit={(e) => { e.preventDefault(); editingId ? updateUser(editingId) : addUser(); }} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="block">
+                <span className="text-sm text-gray-600">Nome</span>
+                <input id="user-nome" required value={userForm.nome} onChange={(e) => setUserForm((f) => ({ ...f, nome: e.target.value }))} className="mt-1 w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+              </label>
+
+              <label className="block">
+                <span className="text-sm text-gray-600">Email</span>
+                <input id="user-email" required type="email" value={userForm.email} onChange={(e) => setUserForm((f) => ({ ...f, email: e.target.value }))} className="mt-1 w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+              </label>
+
+              <label className="block">
+                <span className="text-sm text-gray-600">Senha</span>
+                <input id="user-senha" type="password" value={userForm.senha} onChange={(e) => setUserForm((f) => ({ ...f, senha: e.target.value }))} className="mt-1 w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+              </label>
+
+              <label className="block">
+                <span className="text-sm text-gray-600">Função</span>
+                <select value={userForm.role} onChange={(e) => setUserForm((f) => ({ ...f, role: e.target.value }))} className="mt-1 w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-200">
+                  <option value="usuario">Usuário</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setShowUserModal(false)} className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200">Cancelar</button>
+              <button type="submit" className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">{editingId ? 'Atualizar' : 'Adicionar'}</button>
+            </div>
+          </form>
+        </ModalWrapper>
+      )}
+    </div>
+  );
+
   // Main render
-  // ==========================
-  if (!currentUser) return <LoginScreen />;
+  if (!currentUser) return <div className="flex items-center justify-center h-screen">Faça login (implemente)</div>;
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -139,7 +439,7 @@
           </div>
         </div>
 
-        <nav className="p-4 flex-1 space-y-2">
+        <nav className="p-4 flex-1 space-y-2 overflow-auto">
           <button onClick={() => setActiveTab('dashboard')} className={`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 ${activeTab === 'dashboard' ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
             <History size={20} /> Dashboard
           </button>
@@ -209,7 +509,7 @@
               <div>
                 <form onSubmit={handleManualScan} className="space-y-3">
                   <label className="text-sm text-gray-600">Digite ou cole o código (Barcode ou QR)</label>
-                  <input name="scanInput" className="w-full px-3 py-2 border rounded" placeholder="Ex: PRD001-BAR ou QR-PRD001-..." autoFocus />
+                  <input name="scanInput" className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-200" placeholder="Ex: PRD001-BAR ou QR-PRD001-..." autoFocus />
                   <div className="flex justify-end gap-2">
                     <button type="button" onClick={() => setShowScanner(false)} className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200">Fechar</button>
                     <button type="submit" className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">Processar</button>
