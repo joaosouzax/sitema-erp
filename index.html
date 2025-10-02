@@ -1,268 +1,413 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
-from core.user_management import UserManager
-from modules.estoque.controllers import EstoqueController
-from modules.vendas.controllers import VendasController
-from modules.compras.controllers import ComprasController
-from modules.relatorios.controllers import RelatoriosController
-from core.excel_integration import ExcelExporter
-from core.barcode_integration import BarcodeGenerator
+import React, { useState, useEffect } from "react";
+import {
+  Package,
+  TrendingUp,
+  AlertTriangle,
+  DollarSign,
+  ShoppingCart,
+  Home,
+  LogOut,
+  Plus,
+  Edit,
+  Trash2,
+} from "lucide-react";
 
-class MainApplication:
-    def __init__(self, master):
-        self.master = master
-        master.title("Sistema ERP - Loja de Fogos de Artifício")
+export default function ERPFogos() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [activeTab, setActiveTab] = useState("dashboard");
 
-        self.user_manager = UserManager()
-        self.estoque_controller = EstoqueController()
-        self.vendas_controller = VendasController()
-        self.compras_controller = ComprasController()
-        self.relatorios_controller = RelatoriosController()
-        self.excel_exporter = ExcelExporter()
-        self.barcode_generator = BarcodeGenerator()
+  const [users, setUsers] = useState([
+    {
+      id: 1,
+      username: "admin",
+      password: "admin123",
+      name: "Administrador",
+      role: "admin",
+      email: "admin@pirotecnia.com",
+    },
+    {
+      id: 2,
+      username: "user1",
+      password: "user123",
+      name: "Usuário 1",
+      role: "user",
+      email: "user1@pirotecnia.com",
+    },
+  ]);
 
-        self.user = None
-        self.create_login_page()
+  const [editingUser, setEditingUser] = useState(null);
+  const [newUser, setNewUser] = useState({
+    username: "",
+    password: "",
+    name: "",
+    role: "user",
+    email: "",
+  });
 
-    def create_login_page(self):
-        self.login_frame = ttk.Frame(self.master, padding="12")
-        self.login_frame.pack(fill=tk.BOTH, expand=True)
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
-        ttk.Label(self.login_frame, text="Usuário:").grid(column=0, row=0, sticky=tk.W)
-        self.username_entry = ttk.Entry(self.login_frame, width=20)
-        self.username_entry.grid(column=1, row=0, sticky=tk.E)
+  const doLogin = () => {
+    const user = users.find(
+      (u) => u.username === loginUsername && u.password === loginPassword
+    );
+    if (user) {
+      setCurrentUser(user);
+      setLoginError("");
+      setLoginUsername("");
+      setLoginPassword("");
+      setActiveTab("dashboard");
+    } else {
+      setLoginError("Usuário ou senha inválidos");
+    }
+  };
 
-        ttk.Label(self.login_frame, text="Senha:").grid(column=0, row=1, sticky=tk.W)
-        self.password_entry = ttk.Entry(self.login_frame, width=20, show="*")
-        self.password_entry.grid(column=1, row=1, sticky=tk.E)
+  const addUser = () => {
+    if (
+      !newUser.username ||
+      !newUser.password ||
+      !newUser.name ||
+      !newUser.email
+    ) {
+      setLoginError("Todos os campos são obrigatórios para adicionar usuário");
+      return;
+    }
+    if (users.find((u) => u.username === newUser.username)) {
+      setLoginError("Usuário com este username já existe");
+      return;
+    }
+    const id = users.length ? Math.max(...users.map((u) => u.id)) + 1 : 1;
+    setUsers([...users, { ...newUser, id }]);
+    setNewUser({
+      username: "",
+      password: "",
+      name: "",
+      role: "user",
+      email: "",
+    });
+    setSuccessMessage("Usuário cadastrado com sucesso!");
+    setLoginError("");
+  };
 
-        ttk.Button(self.login_frame, text="Login", command=self.login).grid(column=1, row=2, sticky=tk.E)
+  const updateUser = () => {
+    if (!editingUser) return;
+    if (
+      !editingUser.username ||
+      !editingUser.password ||
+      !editingUser.name ||
+      !editingUser.email
+    ) {
+      setLoginError("Todos os campos são obrigatórios para editar usuário");
+      return;
+    }
+    setUsers(
+      users.map((u) => (u.id === editingUser.id ? editingUser : u))
+    );
+    setEditingUser(null);
+    setSuccessMessage("Usuário atualizado com sucesso!");
+    setLoginError("");
+  };
 
-    def login(self):
-        username = self.username_entry.get()
-        password = self.password_entry.get()
-        user = self.user_manager.authenticate_user(username, password)
-        if user:
-            self.user = user
-            self.login_frame.destroy()
-            self.create_main_page()
-        else:
-            messagebox.showerror("Erro de Login", "Usuário ou senha incorretos.")
+  const deleteUser = (id) => {
+    if (window.confirm("Deseja realmente excluir este usuário?")) {
+      setUsers(users.filter((u) => u.id !== id));
+      setSuccessMessage("Usuário excluído com sucesso!");
+    }
+  };
 
-    def create_main_page(self):
-        self.main_frame = ttk.Frame(self.master, padding="12")
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-900 via-red-900 to-yellow-900 flex items-center justify-center p-4">
+        <div className="bg-gray-900 p-8 rounded-xl shadow-2xl w-full max-w-md border border-orange-700">
+          <h1 className="text-4xl font-bold text-orange-400 mb-8 text-center">
+            Pirotecnia ERP
+          </h1>
+          <input
+            type="text"
+            placeholder="Usuário"
+            value={loginUsername}
+            onChange={(e) => setLoginUsername(e.target.value)}
+            onKeyPress={(e) => e.key === "Enter" && doLogin()}
+            className="w-full p-3 rounded-lg bg-gray-800 text-white mb-4 border border-gray-700 focus:border-orange-400 focus:outline-none"
+          />
+          <input
+            type="password"
+            placeholder="Senha"
+            value={loginPassword}
+            onChange={(e) => setLoginPassword(e.target.value)}
+            onKeyPress={(e) => e.key === "Enter" && doLogin()}
+            className="w-full p-3 rounded-lg bg-gray-800 text-white mb-4 border border-gray-700 focus:border-orange-400 focus:outline-none"
+          />
+          {loginError && (
+            <div className="bg-red-500/20 border border-red-500 text-red-300 p-3 rounded-lg mb-4 text-center">
+              {loginError}
+            </div>
+          )}
+          <button
+            onClick={doLogin}
+            className="w-full bg-orange-600 hover:bg-orange-700 p-3 rounded-lg text-white font-semibold"
+          >
+            Entrar
+          </button>
+          <p className="text-gray-500 text-xs text-center mt-4">
+            Use admin/admin123 para teste
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-        ttk.Label(self.main_frame, text=f"Logado como: {self.user['username']} ({self.user['role']})").pack()
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-900 via-red-900 to-yellow-900 text-gray-100">
+      <header className="bg-gray-900/90 backdrop-blur border-b border-orange-700 p-4 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-orange-400">Pirotecnia ERP</h1>
+          <div className="flex items-center gap-4">
+            <span className="font-semibold text-orange-400">
+              {currentUser.name}
+            </span>
+            <button
+              onClick={() => setCurrentUser(null)}
+              className="flex items-center gap-2 text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Sair</span>
+            </button>
+          </div>
+        </div>
+      </header>
 
-        # Abas
-        self.notebook = ttk.Notebook(self.main_frame)
-        self.notebook.pack(fill=tk.BOTH, expand=True)
+      <div className="max-w-7xl mx-auto p-6">
+        {successMessage && (
+          <div className="mb-4 bg-green-500/20 border border-green-500 text-green-300 p-4 rounded-lg">
+            <TrendingUp className="w-5 h-5 inline" /> {successMessage}
+          </div>
+        )}
+        {loginError && (
+          <div className="mb-4 bg-red-500/20 border border-red-500 text-red-300 p-4 rounded-lg">
+            <AlertTriangle className="w-5 h-5 inline" /> {loginError}
+          </div>
+        )}
 
-        self.create_estoque_tab()
-        self.create_vendas_tab()
-        self.create_compras_tab()
-        self.create_relatorios_tab()
-        self.create_barcode_tab()
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold whitespace-nowrap ${
+              activeTab === "dashboard"
+                ? "bg-orange-600 text-white"
+                : "bg-gray-800 hover:bg-gray-700"
+            }`}
+          >
+            <Home className="w-4 h-4" /> Dashboard
+          </button>
+          <button
+            onClick={() => setActiveTab("users")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold whitespace-nowrap ${
+              activeTab === "users"
+                ? "bg-orange-600 text-white"
+                : "bg-gray-800 hover:bg-gray-700"
+            }`}
+          >
+            <Package className="w-4 h-4" /> Usuários
+          </button>
+        </div>
 
-    def create_estoque_tab(self):
-        self.estoque_tab = ttk.Frame(self.notebook, padding="12")
-        self.notebook.add(self.estoque_tab, text="Estoque")
+        {activeTab === "dashboard" && (
+          <div>
+            <h2 className="text-3xl font-bold mb-6 text-orange-400">Dashboard</h2>
+            <p>Bem-vindo ao sistema, {currentUser.name}!</p>
+          </div>
+        )}
 
-        # Widgets para gerenciar o estoque
-        ttk.Label(self.estoque_tab, text="Nome:").grid(column=0, row=0, sticky=tk.W)
-        self.estoque_nome_entry = ttk.Entry(self.estoque_tab, width=30)
-        self.estoque_nome_entry.grid(column=1, row=0, sticky=tk.E)
+        {activeTab === "users" && (
+          <div>
+            <h2 className="text-3xl font-bold mb-6 text-orange-400">Gestão de Usuários</h2>
 
-        ttk.Label(self.estoque_tab, text="Descrição:").grid(column=0, row=1, sticky=tk.W)
-        self.estoque_descricao_entry = ttk.Entry(self.estoque_tab, width=30)
-        self.estoque_descricao_entry.grid(column=1, row=1, sticky=tk.E)
+            <div className="mb-6 overflow-x-auto rounded-lg border border-gray-700 bg-gray-800 shadow">
+              <table className="w-full text-left text-gray-300">
+                <thead className="border-b border-gray-700 bg-gray-900">
+                  <tr>
+                    <th className="p-3">Usuário</th>
+                    <th className="p-3">Nome</th>
+                    <th className="p-3">Email</th>
+                    <th className="p-3">Função</th>
+                    <th className="p-3 text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((user) => (
+                    <tr key={user.id} className="border-b border-gray-700 hover:bg-gray-700">
+                      <td className="p-3 font-mono">{user.username}</td>
+                      <td className="p-3">{user.name}</td>
+                      <td className="p-3">{user.email}</td>
+                      <td className="p-3">{user.role}</td>
+                      <td className="p-3 text-center flex justify-center gap-2">
+                        <button
+                          onClick={() => setEditingUser(user)}
+                          className="p-2 bg-blue-600 hover:bg-blue-700 rounded-lg"
+                          title="Editar"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        {user.username !== "admin" && (
+                          <button
+                            onClick={() => deleteUser(user.id)}
+                            className="p-2 bg-red-600 hover:bg-red-700 rounded-lg"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-        ttk.Label(self.estoque_tab, text="Quantidade:").grid(column=0, row=2, sticky=tk.W)
-        self.estoque_quantidade_entry = ttk.Entry(self.estoque_tab, width=10)
-        self.estoque_quantidade_entry.grid(column=1, row=2, sticky=tk.E)
+            {!editingUser && (
+              <div className="mb-6">
+                <h3 className="text-xl font-semibold mb-4 text-green-400">
+                  Cadastrar Novo Usuário
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    placeholder="Usuário"
+                    value={newUser.username}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, username: e.target.value })
+                    }
+                    className="p-3 bg-gray-700 rounded-lg border border-gray-600 focus:border-orange-400 focus:outline-none"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Senha"
+                    value={newUser.password}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, password: e.target.value })
+                    }
+                    className="p-3 bg-gray-700 rounded-lg border border-gray-600 focus:border-orange-400 focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Nome completo"
+                    value={newUser.name}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, name: e.target.value })
+                    }
+                    className="p-3 bg-gray-700 rounded-lg border border-gray-600 focus:border-orange-400 focus:outline-none"
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={newUser.email}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, email: e.target.value })
+                    }
+                    className="p-3 bg-gray-700 rounded-lg border border-gray-600 focus:border-orange-400 focus:outline-none"
+                  />
+                  <select
+                    value={newUser.role}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, role: e.target.value })
+                    }
+                    className="p-3 bg-gray-700 rounded-lg border border-gray-600 focus:border-orange-400 focus:outline-none"
+                  >
+                    <option value="user">Usuário</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                  <button
+                    onClick={addUser}
+                    className="bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg p-3"
+                  >
+                    <Plus className="inline w-4 h-4 mr-2" />
+                    Adicionar Usuário
+                  </button>
+                </div>
+              </div>
+            )}
 
-        ttk.Label(self.estoque_tab, text="Preço de Compra:").grid(column=0, row=3, sticky=tk.W)
-        self.estoque_preco_compra_entry = ttk.Entry(self.estoque_tab, width=10)
-        self.estoque_preco_compra_entry.grid(column=1, row=3, sticky=tk.E)
+            {editingUser && (
+              <div className="mb-6 bg-gray-700 p-4 rounded-lg">
+                <h3 className="text-xl font-semibold mb-4 text-yellow-400">
+                  Editar Usuário
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    placeholder="Usuário"
+                    value={editingUser.username}
+                    onChange={(e) =>
+                      setEditingUser({ ...editingUser, username: e.target.value })
+                    }
+                    className="p-3 rounded-lg border border-gray-600 focus:border-orange-400 focus:outline-none"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Senha"
+                    value={editingUser.password}
+                    onChange={(e) =>
+                      setEditingUser({ ...editingUser, password: e.target.value })
+                    }
+                    className="p-3 rounded-lg border border-gray-600 focus:border-orange-400 focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Nome completo"
+                    value={editingUser.name}
+                    onChange={(e) =>
+                      setEditingUser({ ...editingUser, name: e.target.value })
+                    }
+                    className="p-3 rounded-lg border border-gray-600 focus:border-orange-400 focus:outline-none"
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={editingUser.email}
+                    onChange={(e) =>
+                      setEditingUser({ ...editingUser, email: e.target.value })
+                    }
+                    className="p-3 rounded-lg border border-gray-600 focus:border-orange-400 focus:outline-none"
+                  />
+                  <select
+                    value={editingUser.role}
+                    onChange={(e) =>
+                      setEditingUser({ ...editingUser, role: e.target.value })
+                    }
+                    className="p-3 rounded-lg border border-gray-600 focus:border-orange-400 focus:outline-none"
+                  >
+                    <option value="user">Usuário</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                  <div className="flex gap-4 items-center">
+                    <button
+                      onClick={updateUser}
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-lg p-3"
+                    >
+                      <Edit className="inline w-4 h-4 mr-2" />
+                      Salvar
+                    </button>
+                    <button
+                      onClick={() => setEditingUser(null)}
+                      className="bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-lg p-3"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
-        ttk.Label(self.estoque_tab, text="Preço de Venda:").grid(column=0, row=4, sticky=tk.W)
-        self.estoque_preco_venda_entry = ttk.Entry(self.estoque_tab, width=10)
-        self.estoque_preco_venda_entry.grid(column=1, row=4, sticky=tk.E)
+      <footer className="bg-gray-900 border-t border-orange-700 p-4 mt-8 text-center text-gray-400 text-sm">
+        Pirotecnia ERP 2025 - Sistema de Gestão de Fogos de Artifício
+      </footer>
+    </div>
+  );
+}
 
-        ttk.Label(self.estoque_tab, text="Categoria:").grid(column=0, row=5, sticky=tk.W)
-        self.estoque_categoria_entry = ttk.Entry(self.estoque_tab, width=20)
-        self.estoque_categoria_entry.grid(column=1, row=5, sticky=tk.E)
-
-        ttk.Label(self.estoque_tab, text="Fornecedor:").grid(column=0, row=6, sticky=tk.W)
-        self.estoque_fornecedor_entry = ttk.Entry(self.estoque_tab, width=20)
-        self.estoque_fornecedor_entry.grid(column=1, row=6, sticky=tk.E)
-
-        ttk.Button(self.estoque_tab, text="Adicionar Item", command=self.adicionar_item_estoque).grid(column=1, row=7, sticky=tk.E)
-
-        # Treeview para listar os itens
-        self.estoque_tree = ttk.Treeview(self.estoque_tab, columns=(0, 1, 2, 3, 4, 5, 6), show='headings')
-        self.estoque_tree.grid(column=0, row=8, columnspan=2, sticky=tk.W + tk.E)
-
-        self.estoque_tree.heading(0, text='Nome')
-        self.estoque_tree.heading(1, text='Descrição')
-        self.estoque_tree.heading(2, text='Quantidade')
-        self.estoque_tree.heading(3, text='Preço Compra')
-        self.estoque_tree.heading(4, text='Preço Venda')
-        self.estoque_tree.heading(5, text='Categoria')
-        self.estoque_tree.heading(6, text='Fornecedor')
-
-        self.atualizar_lista_estoque()
-
-    def adicionar_item_estoque(self):
-        nome = self.estoque_nome_entry.get()
-        descricao = self.estoque_descricao_entry.get()
-        quantidade = self.estoque_quantidade_entry.get()
-        preco_compra = self.estoque_preco_compra_entry.get()
-        preco_venda = self.estoque_preco_venda_entry.get()
-        categoria = self.estoque_categoria_entry.get()
-        fornecedor = self.estoque_fornecedor_entry.get()
-
-        try:
-            quantidade = int(quantidade)
-            preco_compra = float(preco_compra)
-            preco_venda = float(preco_venda)
-        except ValueError:
-            messagebox.showerror("Erro", "Quantidade e preços devem ser números válidos.")
-            return
-
-        self.estoque_controller.adicionar_item(nome, descricao, quantidade, preco_compra, preco_venda, categoria, fornecedor)
-        self.atualizar_lista_estoque()
-        self.limpar_campos_estoque()
-
-    def atualizar_lista_estoque(self):
-        for item in self.estoque_tree.get_children():
-            self.estoque_tree.delete(item)
-
-        itens = self.estoque_controller.listar_itens()
-        for item in itens:
-            self.estoque_tree.insert('', tk.END, values=(item.nome, item.descricao, item.quantidade, item.preco_compra, item.preco_venda, item.categoria, item.fornecedor))
-
-    def limpar_campos_estoque(self):
-        self.estoque_nome_entry.delete(0, tk.END)
-        self.estoque_descricao_entry.delete(0, tk.END)
-        self.estoque_quantidade_entry.delete(0, tk.END)
-        self.estoque_preco_compra_entry.delete(0, tk.END)
-        self.estoque_preco_venda_entry.delete(0, tk.END)
-        self.estoque_categoria_entry.delete(0, tk.END)
-        self.estoque_fornecedor_entry.delete(0, tk.END)
-
-    def create_vendas_tab(self):
-        self.vendas_tab = ttk.Frame(self.notebook, padding="12")
-        self.notebook.add(self.vendas_tab, text="Vendas")
-
-        # Widgets para registrar vendas
-        ttk.Label(self.vendas_tab, text="Item ID:").grid(column=0, row=0, sticky=tk.W)
-        self.vendas_item_id_entry = ttk.Entry(self.vendas_tab, width=10)
-        self.vendas_item_id_entry.grid(column=1, row=0, sticky=tk.E)
-
-        ttk.Label(self.vendas_tab, text="Quantidade:").grid(column=0, row=1, sticky=tk.W)
-        self.vendas_quantidade_entry = ttk.Entry(self.vendas_tab, width=10)
-        self.vendas_quantidade_entry.grid(column=1, row=1, sticky=tk.E)
-
-        ttk.Label(self.vendas_tab, text="Preço Unitário:").grid(column=0, row=2, sticky=tk.W)
-        self.vendas_preco_unitario_entry = ttk.Entry(self.vendas_tab, width=10)
-        self.vendas_preco_unitario_entry.grid(column=1, row=2, sticky=tk.E)
-
-        ttk.Button(self.vendas_tab, text="Registrar Venda", command=self.registrar_venda).grid(column=1, row=3, sticky=tk.E)
-
-        # Treeview para listar as vendas
-        self.vendas_tree = ttk.Treeview(self.vendas_tab, columns=(0, 1, 2, 3), show='headings')
-        self.vendas_tree.grid(column=0, row=4, columnspan=2, sticky=tk.W + tk.E)
-
-        self.vendas_tree.heading(0, text='Data')
-        self.vendas_tree.heading(1, text='Item ID')
-        self.vendas_tree.heading(2, text='Quantidade')
-        self.vendas_tree.heading(3, text='Preço Unitário')
-
-        self.atualizar_lista_vendas()
-
-    def registrar_venda(self):
-        item_id = self.vendas_item_id_entry.get()
-        quantidade = self.vendas_quantidade_entry.get()
-        preco_unitario = self.vendas_preco_unitario_entry.get()
-
-        try:
-            item_id = int(item_id)
-            quantidade = int(quantidade)
-            preco_unitario = float(preco_unitario)
-        except ValueError:
-            messagebox.showerror("Erro", "Item ID, quantidade e preço devem ser números válidos.")
-            return
-
-        self.vendas_controller.registrar_venda(item_id, quantidade, preco_unitario)
-        self.atualizar_lista_vendas()
-        self.limpar_campos_vendas()
-
-    def atualizar_lista_vendas(self):
-        for item in self.vendas_tree.get_children():
-            self.vendas_tree.delete(item)
-
-        vendas = self.vendas_controller.listar_vendas()
-        for venda in vendas:
-            self.vendas_tree.insert('', tk.END, values=(venda.data, venda.item_id, venda.quantidade, venda.preco_unitario))
-
-    def limpar_campos_vendas(self):
-        self.vendas_item_id_entry.delete(0, tk.END)
-        self.vendas_quantidade_entry.delete(0, tk.END)
-        self.vendas_preco_unitario_entry.delete(0, tk.END)
-
-    def create_compras_tab(self):
-        self.compras_tab = ttk.Frame(self.notebook, padding="12")
-        self.notebook.add(self.compras_tab, text="Compras")
-
-        # Widgets para gerenciar compras
-        ttk.Label(self.compras_tab, text="Item ID:").grid(column=0, row=0, sticky=tk.W)
-        self.compras_item_id_entry = ttk.Entry(self.compras_tab, width=10)
-        self.compras_item_id_entry.grid(column=1, row=0, sticky=tk.E)
-
-        ttk.Label(self.compras_tab, text="Quantidade:").grid(column=0, row=1, sticky=tk.W)
-        self.compras_quantidade_entry = ttk.Entry(self.compras_tab, width=10)
-        self.compras_quantidade_entry.grid(column=1, row=1, sticky=tk.E)
-
-        ttk.Label(self.compras_tab, text="Preço Unitário:").grid(column=0, row=2, sticky=tk.W)
-        self.compras_preco_unitario_entry = ttk.Entry(self.compras_tab, width=10)
-        self.compras_preco_unitario_entry.grid(column=1, row=2, sticky=tk.E)
-
-        ttk.Button(self.compras_tab, text="Registrar Compra", command=self.registrar_compra).grid(column=1, row=3, sticky=tk.E)
-
-        # Treeview para listar as compras
-        self.compras_tree = ttk.Treeview(self.compras_tab, columns=(0, 1, 2, 3), show='headings')
-        self.compras_tree.grid(column=0, row=4, columnspan=2, sticky=tk.W + tk.E)
-
-        self.compras_tree.heading(0, text='Data')
-        self.compras_tree.heading(1, text='Item ID')
-        self.compras_tree.heading(2, text='Quantidade')
-        self.compras_tree.heading(3, text='Preço Unitário')
-
-        self.atualizar_lista_compras()
-
-    def registrar_compra(self):
-        item_id = self.compras_item_id_entry.get()
-        quantidade = self.compras_quantidade_entry.get()
-        preco_unitario = self.compras_preco_unitario_entry.get()
-
-        try:
-            item_id = int(item_id)
-            quantidade = int(quantidade)
-            preco_unitario = float(preco_unitario)
-        except ValueError:
-            messagebox.showerror("Erro", "Item ID, quantidade e preço devem ser números válidos.")
-            return
-
-        self.compras_controller.registrar_compra(item_id, quantidade, preco_unitario)
-        self.atualizar_lista_compras()
-        self.limpar_campos_compras()
-
-    def atualizar_lista_compras(self):
-        for item in self.compras_tree.get_children():
-            self.compras_tree.delete(item)
-
-        compras = self.compras_controller.listar_compras()
-        for compra in compras:
-            self.compras_tree.insert('', tk.END, values=(compra.data, compra.item
